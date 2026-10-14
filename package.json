@@ -1,6 +1,6 @@
 {
 	"name": "semble-obsidian-plugin",
-	"version": "0.5.0",
+	"version": "0.6.0",
 	"description": "Organize and interact with web links in your notes using Semble.",
 	"main": "main.js",
 	"type": "module",
