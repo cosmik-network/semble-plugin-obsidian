@@ -1,10 +1,10 @@
 {
-  "id": "semble-plugin",
-  "name": "Semble",
-  "version": "0.3.0",
-  "minAppVersion": "1.11.4",
-  "description": "Organize and interact with web links in your notes using Semble.",
-  "author": "Cosmik Network",
-  "authorUrl": "https://cosmik.network",
-  "isDesktopOnly": false
+	"id": "semble-plugin",
+	"name": "Semble",
+	"version": "0.4.0",
+	"minAppVersion": "1.11.4",
+	"description": "Organize and interact with web links in your notes using Semble.",
+	"author": "Cosmik Network",
+	"authorUrl": "https://cosmik.network",
+	"isDesktopOnly": false
 }
