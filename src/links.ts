@@ -1,12 +1,11 @@
-import type { CachedMetadata, Loc, Pos } from "obsidian";
+import type { Loc, Pos } from "obsidian";
 
 /*
  * Web link extraction. Kept free of runtime `obsidian` imports so it can be
  * unit tested in plain Node.
  *
  * Obsidian's metadata cache doesn't record external links, so http(s) URLs
- * are found by scanning the note text with code blocks, inline code,
- * frontmatter and internal links (from the cache) masked out.
+ * are found by scanning the whole note text, including frontmatter and code.
  */
 
 export interface WebLink {
@@ -32,13 +31,10 @@ const MARKDOWN_LINK =
 const AUTOLINK = /<([a-z][a-z0-9+.-]*:[^\s<>]+)>/gi;
 // Bare https://example.com, which Obsidian renders as a link.
 const BARE_URL = /\bhttps?:\/\/[^\s<>"'`[\]]+/gi;
-const INLINE_CODE = /(`+)[^\n]*?\1/g;
-const FENCED_CODE = /^ {0,3}(`{3,}|~{3,})[^\n]*\n[\s\S]*?(?:^ {0,3}\1[`~]*[ \t]*$|(?![\s\S]))/gm;
-const FRONTMATTER = /^---\n[\s\S]*?\n---[ \t]*(?:\n|$)/;
 
 type Range = [start: number, end: number];
 
-export function extractLinks(content: string, cache: CachedMetadata | null): WebLink[] {
+export function extractLinks(content: string): WebLink[] {
 	const lineStarts = computeLineStarts(content);
 	const links: WebLink[] = [];
 	const add = (start: number, end: number, link: Omit<WebLink, "original" | "position">) => {
@@ -50,7 +46,7 @@ export function extractLinks(content: string, cache: CachedMetadata | null): Web
 		});
 	};
 
-	let text = mask(content, ignoredRanges(content, cache));
+	let text = content;
 
 	// Each pass masks what it matched so later, looser patterns don't re-match it.
 	const matched: Range[] = [];
@@ -79,32 +75,6 @@ export function extractLinks(content: string, cache: CachedMetadata | null): Web
 	}
 
 	return links.sort((a, b) => a.position.start.offset - b.position.start.offset);
-}
-
-/** Regions whose contents are never web links. */
-function ignoredRanges(content: string, cache: CachedMetadata | null): Range[] {
-	const ranges: Range[] = [];
-	if (cache?.sections) {
-		for (const section of cache.sections) {
-			if (section.type === "code" || section.type === "yaml" || section.type === "math") {
-				ranges.push([section.position.start.offset, section.position.end.offset]);
-			}
-		}
-	} else {
-		// Not indexed yet: approximate fenced code blocks and frontmatter.
-		const fm = FRONTMATTER.exec(content);
-		if (fm) ranges.push([0, fm[0].length]);
-		for (const m of content.matchAll(FENCED_CODE)) ranges.push([m.index, m.index + m[0].length]);
-	}
-
-	// Internal links, so a URL used as alias text (e.g. [[Note|https://…]]) isn't listed.
-	for (const ref of [...(cache?.links ?? []), ...(cache?.embeds ?? [])]) {
-		if (!WEB_URL.test(ref.link)) ranges.push([ref.position.start.offset, ref.position.end.offset]);
-	}
-
-	const withoutBlocks = mask(content, ranges);
-	for (const m of withoutBlocks.matchAll(INLINE_CODE)) ranges.push([m.index, m.index + m[0].length]);
-	return ranges;
 }
 
 /** Blank out ranges with spaces, keeping newlines so offsets and line numbers are preserved. */

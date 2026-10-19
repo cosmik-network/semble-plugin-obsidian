@@ -1,14 +1,7 @@
-import type { CachedMetadata } from "obsidian";
 import { describe, expect, it } from "vitest";
 import { extractLinks, trimTrailingPunctuation } from "../src/links";
 
-const urls = (content: string, cache: CachedMetadata | null = null) =>
-	extractLinks(content, cache).map((link) => link.url);
-
-const pos = (start: number, end: number) => ({
-	start: { line: 0, col: start, offset: start },
-	end: { line: 0, col: end, offset: end },
-});
+const urls = (content: string) => extractLinks(content).map((link) => link.url);
 
 describe("extractLinks", () => {
 	it("finds markdown links, autolinks and bare URLs in document order", () => {
@@ -17,13 +10,13 @@ describe("extractLinks", () => {
 	});
 
 	it("uses anchor text as display text and falls back to the URL", () => {
-		const [named, bare] = extractLinks("[Semble](https://semble.so) https://x.dev", null);
+		const [named, bare] = extractLinks("[Semble](https://semble.so) https://x.dev");
 		expect(named?.displayText).toBe("Semble");
 		expect(bare?.displayText).toBe("https://x.dev");
 	});
 
 	it("marks remote images", () => {
-		const [link] = extractLinks("![alt](https://img.dev/a.png)", null);
+		const [link] = extractLinks("![alt](https://img.dev/a.png)");
 		expect(link).toMatchObject({ image: true, url: "https://img.dev/a.png" });
 	});
 
@@ -37,31 +30,29 @@ describe("extractLinks", () => {
 		expect(urls("[note](Some%20Note.md) [[Other]] [mail](mailto:a@b.dev) <obsidian://open?vault=x>")).toEqual([]);
 	});
 
-	it("ignores URLs used as text inside internal links", () => {
-		const content = "[[Note|https://alias.dev]]";
-		const cache: CachedMetadata = {
-			links: [{ link: "Note", original: content, displayText: "https://alias.dev", position: pos(0, content.length) }],
-		};
-		expect(urls(content, cache)).toEqual([]);
-		expect(urls("[https://text.dev](Note.md)")).toEqual([]);
-	});
-
-	it("skips code blocks, inline code and frontmatter", () => {
+	it("includes URLs in internal link aliases, code and frontmatter", () => {
 		const content = [
 			"---",
 			"source: https://frontmatter.dev",
 			"---",
+			"[[Note|https://alias.dev]]",
 			"`https://inline.dev`",
 			"```",
 			"https://fenced.dev",
 			"```",
 			"https://real.dev",
 		].join("\n");
-		expect(urls(content)).toEqual(["https://real.dev"]);
+		expect(urls(content)).toEqual([
+			"https://frontmatter.dev",
+			"https://alias.dev",
+			"https://inline.dev",
+			"https://fenced.dev",
+			"https://real.dev",
+		]);
 	});
 
 	it("records zero-based line and column", () => {
-		const [link] = extractLinks("first\n  https://a.dev", null);
+		const [link] = extractLinks("first\n  https://a.dev");
 		expect(link?.position.start).toEqual({ line: 1, col: 2, offset: 8 });
 		expect(link?.position.end.offset).toBe(21);
 	});

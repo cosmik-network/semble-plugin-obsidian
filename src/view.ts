@@ -138,7 +138,7 @@ export class LinksView extends ItemView {
 
 		const content = await this.app.vault.cachedRead(file);
 		if (id !== this.refreshId) return;
-		this.links = extractLinks(content, this.app.metadataCache.getFileCache(file));
+		this.links = extractLinks(content);
 		this.render();
 	}
 
