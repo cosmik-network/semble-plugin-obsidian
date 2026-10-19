@@ -24,6 +24,16 @@ ln -s "$(pwd)" /path/to/test-vault/.obsidian/plugins/semble
 
 Then in Obsidian go to **Settings → Community plugins**, turn on community plugins, and enable **Semble**. With `npm run dev` running, use the **Reload app without saving** command to pick up changes, or install the [Hot Reload](https://github.com/pjeby/hot-reload) plugin to reload automatically.
 
+### Checking the mobile layout
+
+To preview the mobile UI on desktop, open the developer console (`Cmd+Opt+I` on macOS, `Ctrl+Shift+I` on Windows and Linux) and run:
+
+```js
+this.app.emulateMobile(true); // emulateMobile(false) switches back
+```
+
+Obsidian reloads with the mobile interface: sidebars become drawers, `body` gets the `is-mobile` class, and `Platform.isMobile` is `true`. To try phone widths, turn on the DevTools device toolbar (`Cmd+Shift+M` on macOS, `Ctrl+Shift+M` on Windows and Linux) and pick a device size. This is the quickest way to check layout and styles. It still runs on Electron, though, so test on a real device before a release.
+
 ## Project layout
 
 ```
