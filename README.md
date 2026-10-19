@@ -1,4 +1,4 @@
-# Semble for Obsidian
+# Semble Collect
 
 ![screenshot of the link list in the semble plugin](assets/image-3.png)
 

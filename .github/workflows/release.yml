@@ -8,15 +8,18 @@ on:
       - "*"
 
 permissions:
-  contents: write
+  contents: write # create the release
+  id-token: write # sign the attestations
+  attestations: write # store the attestations
+  artifact-metadata: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22.x"
           cache: npm
@@ -38,6 +41,16 @@ jobs:
           npm run lint
           npm test
           npm run build
+
+      # Lets users verify the release files were built here, from this tag:
+      # gh attestation verify main.js --repo cosmik-network/semble-plugin-obsidian
+      - name: Attest build provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            main.js
+            manifest.json
+            styles.css
 
       - name: Create draft release
         env:

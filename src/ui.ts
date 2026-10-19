@@ -19,6 +19,26 @@ export function plural(count: number, singular: string, pluralForm = `${singular
 	return `${count} ${count === 1 ? singular : pluralForm}`;
 }
 
+const TIME_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
+	["year", 365 * 86400],
+	["month", 30 * 86400],
+	["week", 7 * 86400],
+	["day", 86400],
+	["hour", 3600],
+	["minute", 60],
+];
+
+/** "3 days ago", "last month", etc. Returns "" for an unparseable date. */
+export function timeAgo(date: string): string {
+	const seconds = (Date.parse(date) - Date.now()) / 1000;
+	if (Number.isNaN(seconds)) return "";
+	const format = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+	for (const [unit, size] of TIME_UNITS) {
+		if (Math.abs(seconds) >= size) return format.format(Math.round(seconds / size), unit);
+	}
+	return format.format(0, "minute");
+}
+
 /** Muted placeholder text, with an optional retry link for failed loads. */
 export function renderMessage(parentEl: HTMLElement, text: string, retry?: () => void): HTMLElement {
 	const el = parentEl.createDiv({ cls: "semble-message", text });

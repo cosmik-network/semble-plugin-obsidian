@@ -98,7 +98,7 @@ export default class SemblePlugin extends Plugin {
 		menusWithItem.add(menu);
 		menu.addItem((item) =>
 			item
-				.setTitle("Show Semble Details")
+				.setTitle("Show Semble details")
 				.setIcon(SEMBLE_ICON)
 				.setSection("action")
 				.onClick(() => void this.showUrl(url, offset)),

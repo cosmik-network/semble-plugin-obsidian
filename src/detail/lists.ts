@@ -1,6 +1,5 @@
-import { moment } from "obsidian";
 import { URL_TYPES, type Collection, type LibraryEntry, type UrlType, type UrlView } from "../api";
-import { openLink, openUrl, plural, renderRow, renderToggleGroup, setSavesFlair } from "../ui";
+import { openLink, openUrl, plural, renderRow, renderToggleGroup, setSavesFlair, timeAgo } from "../ui";
 import { hostOf, sembleCollectionUrl, sembleProfileUrl } from "../urls";
 import { PagedPanel } from "./context";
 
@@ -83,7 +82,8 @@ export class CollectionsPanel extends PagedPanel<Collection> {
 	protected renderItem(collection: Collection): void {
 		const url = sembleCollectionUrl(collection.author.handle, collection.uri);
 		const detail = [plural(collection.cardCount, "card"), `@${collection.author.handle}`];
-		if (collection.updatedAt) detail.push(`updated ${moment(collection.updatedAt).fromNow()}`);
+		const updated = collection.updatedAt ? timeAgo(collection.updatedAt) : "";
+		if (updated) detail.push(`updated ${updated}`);
 		renderRow(this.listEl, {
 			title: collection.name,
 			detail: detail.join(" · "),

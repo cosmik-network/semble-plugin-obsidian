@@ -316,7 +316,7 @@ export class LinksView extends ItemView {
 		const menu = new Menu();
 		menu.addItem((item) =>
 			item
-				.setTitle("Show Semble Details")
+				.setTitle("Show Semble details")
 				.setIcon("info")
 				.onClick(() => this.openDetail(link)),
 		);

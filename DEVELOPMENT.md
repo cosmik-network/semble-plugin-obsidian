@@ -1,4 +1,4 @@
-# Developing Semble for Obsidian
+# Developing Semble Collect
 
 This covers setup, how the plugin works, and releasing. For what the plugin does, see the [README](README.md).
 
@@ -19,10 +19,10 @@ npm test         # unit tests (Vitest): link extraction, API client, URL helpers
 Use a separate test vault, not your real one. Link the repo into the vault's plugin folder; the folder name must match the `id` in `manifest.json`:
 
 ```sh
-ln -s "$(pwd)" /path/to/test-vault/.obsidian/plugins/semble
+ln -s "$(pwd)" /path/to/test-vault/.obsidian/plugins/semble-collect
 ```
 
-Then in Obsidian go to **Settings → Community plugins**, turn on community plugins, and enable **Semble**. With `npm run dev` running, use the **Reload app without saving** command to pick up changes, or install the [Hot Reload](https://github.com/pjeby/hot-reload) plugin to reload automatically.
+Then in Obsidian go to **Settings → Community plugins**, turn on community plugins, and enable **Semble Collect**. With `npm run dev` running, use the **Reload app without saving** command to pick up changes, or install the [Hot Reload](https://github.com/pjeby/hot-reload) plugin to reload automatically.
 
 ### Checking the mobile layout
 
