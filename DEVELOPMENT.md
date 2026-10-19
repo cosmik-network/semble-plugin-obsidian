@@ -149,25 +149,25 @@ Obsidian installs plugins from GitHub releases: each release must have `main.js`
 
 ### Releasing a version
 
-The tag must match the version in `manifest.json` exactly, with no `v` prefix.
-
-**First release** (`manifest.json` is already at `0.1.0`):
+Commit your changes first (`npm version` refuses to run with uncommitted changes), then:
 
 ```sh
-git tag 0.1.0
-git push origin 0.1.0
-```
-
-**Later releases:**
-
-```sh
-npm version patch    # or minor / major; updates manifest.json and versions.json via version-bump.mjs, then commits and tags
+npm version minor    # or patch / major
 git push --follow-tags
 ```
 
-The workflow then lints, tests, builds, and creates a **draft** GitHub release with the three files attached. Open it on the repo's Releases page, add release notes, and click **Publish**. Users get the update once the release is published.
+`npm version` does the whole bump in one commit:
 
-If you raise `minAppVersion`, update it in `manifest.json` before running `npm version`. `versions.json` then records which plugin versions need which Obsidian version, so people on older Obsidian versions get the last compatible release.
+1. Runs `preversion`: lint and tests, so a broken build never gets a version.
+2. Bumps `package.json` and `package-lock.json`.
+3. Runs `version-bump.mjs`, which copies the version into `manifest.json` and adds it, with its `minAppVersion`, to `versions.json`.
+4. Commits all four files with the version as the message (for example `0.7.0`), and tags that commit `0.7.0`. `.npmrc` sets `tag-version-prefix=""`, because Obsidian needs the tag to match `manifest.json` exactly, with no `v` prefix.
+
+`git push --follow-tags` pushes the commit and its tag. The release workflow checks that the tag matches `manifest.json` and that `versions.json` has an entry for it. It then lints, tests, builds, and creates a **draft** GitHub release with the three files attached. Open it on the repo's Releases page, add release notes, and click **Publish**. Users get the update once the release is published.
+
+If you raise `minAppVersion`, commit the change in `manifest.json` before running `npm version`. `versions.json` records which plugin versions need which Obsidian version, so people on older Obsidian versions get the last compatible release.
+
+**Undoing a bump that hasn't been pushed:** `git reset --hard HEAD~1` and `git tag -d <version>`.
 
 ### Beta testing with BRAT
 

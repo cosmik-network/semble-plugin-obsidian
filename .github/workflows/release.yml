@@ -21,6 +21,17 @@ jobs:
           node-version: "22.x"
           cache: npm
 
+      - name: Check tag matches manifest.json
+        run: |
+          tag="${GITHUB_REF#refs/tags/}"
+          version="$(node -p 'require("./manifest.json").version')"
+          if [ "$tag" != "$version" ]; then
+            echo "::error::Tag $tag doesn't match manifest.json version $version"
+            exit 1
+          fi
+          node -e 'const v = require("./versions.json"); process.exit(v[process.argv[1]] ? 0 : 1)' "$version" \
+            || { echo "::error::versions.json has no entry for $version"; exit 1; }
+
       - name: Build
         run: |
           npm ci
