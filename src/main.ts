@@ -1,7 +1,12 @@
-import { Notice, Plugin } from "obsidian";
+import { type Editor, type Menu, Notice, Plugin } from "obsidian";
 import { SembleClient } from "./api";
 import { registerIcons, SEMBLE_ICON } from "./icon";
-import { DEFAULT_SETTINGS, SembleSettingTab, type SembleSettings } from "./settings";
+import { extractLinks } from "./links";
+import {
+	DEFAULT_SETTINGS,
+	SembleSettingTab,
+	type SembleSettings,
+} from "./settings";
 import { LinksView, VIEW_TYPE_LINKS } from "./view";
 
 export default class SemblePlugin extends Plugin {
@@ -14,7 +19,9 @@ export default class SemblePlugin extends Plugin {
 
 		this.registerView(VIEW_TYPE_LINKS, (leaf) => new LinksView(leaf, this));
 
-		this.addRibbonIcon(SEMBLE_ICON, "Show web links in current note", () => this.activateView());
+		this.addRibbonIcon(SEMBLE_ICON, "Show web links in current note", () =>
+			this.activateView(),
+		);
 		this.addCommand({
 			id: "show-web-links",
 			name: "Show web links in current note",
@@ -22,6 +29,21 @@ export default class SemblePlugin extends Plugin {
 		});
 
 		this.addSettingTab(new SembleSettingTab(this.app, this));
+
+		// Right-clicking a rendered link (reading view, live preview, properties).
+		this.registerEvent(
+			this.app.workspace.on("url-menu", (menu, url) => {
+				if (/^https?:\/\//i.test(url))
+					this.addShowInSembleItem(menu, url);
+			}),
+		);
+		// Right-clicking a link's source text in the editor.
+		this.registerEvent(
+			this.app.workspace.on("editor-menu", (menu, editor) => {
+				const link = linkAtCursor(editor);
+				if (link) this.addShowInSembleItem(menu, link.url, link.offset);
+			}),
+		);
 
 		// Wait for the workspace to be restored, so an existing pane is found rather than duplicated.
 		this.app.workspace.onLayoutReady(() => void this.addPaneOnFirstRun());
@@ -35,7 +57,10 @@ export default class SemblePlugin extends Plugin {
 	 */
 	private async addPaneOnFirstRun(): Promise<void> {
 		if (this.settings.paneAdded) return;
-		await this.app.workspace.ensureSideLeaf(VIEW_TYPE_LINKS, "right", { active: false, reveal: false });
+		await this.app.workspace.ensureSideLeaf(VIEW_TYPE_LINKS, "right", {
+			active: false,
+			reveal: false,
+		});
 		this.settings.paneAdded = true;
 		await this.saveData(this.settings);
 	}
@@ -45,13 +70,47 @@ export default class SemblePlugin extends Plugin {
 
 	/** Reveal the links pane, creating it in the right sidebar if it isn't open yet. */
 	async activateView(): Promise<void> {
-		await this.app.workspace.ensureSideLeaf(VIEW_TYPE_LINKS, "right", { active: true, reveal: true });
+		await this.app.workspace.ensureSideLeaf(VIEW_TYPE_LINKS, "right", {
+			active: true,
+			reveal: true,
+		});
+	}
+
+	/** Reveal the links pane with the link view open for a URL in the current note. */
+	async showUrl(url: string, offset?: number): Promise<void> {
+		const leaf = await this.app.workspace.ensureSideLeaf(
+			VIEW_TYPE_LINKS,
+			"right",
+			{ active: true, reveal: true },
+		);
+		await leaf.loadIfDeferred();
+		if (leaf.view instanceof LinksView)
+			await leaf.view.showUrl(url, offset);
+	}
+
+	private addShowInSembleItem(
+		menu: Menu,
+		url: string,
+		offset?: number,
+	): void {
+		// Live preview can fire both menu events for one right-click.
+		if (menusWithItem.has(menu)) return;
+		menusWithItem.add(menu);
+		menu.addItem((item) =>
+			item
+				.setTitle("Show Semble Details")
+				.setIcon(SEMBLE_ICON)
+				.setSection("action")
+				.onClick(() => void this.showUrl(url, offset)),
+		);
 	}
 
 	/** The API key from Obsidian's secret storage, or null if none is configured. */
 	getApiKey(): string | null {
 		const { apiKeySecret } = this.settings;
-		return apiKeySecret ? this.app.secretStorage.getSecret(apiKeySecret) : null;
+		return apiKeySecret
+			? this.app.secretStorage.getSecret(apiKeySecret)
+			: null;
 	}
 
 	async checkConnection(): Promise<void> {
@@ -60,7 +119,11 @@ export default class SemblePlugin extends Plugin {
 			const profile = await this.api.getMyProfile();
 			new Notice(`Connected to Semble as @${profile.handle}`);
 		} catch (err) {
-			new Notice(err instanceof Error ? err.message : "Couldn't connect to Semble.");
+			new Notice(
+				err instanceof Error
+					? err.message
+					: "Couldn't connect to Semble.",
+			);
 		}
 	}
 
@@ -75,9 +138,23 @@ export default class SemblePlugin extends Plugin {
 
 	async saveSettings(): Promise<void> {
 		await this.saveData(this.settings);
-		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_LINKS)) {
+		for (const leaf of this.app.workspace.getLeavesOfType(
+			VIEW_TYPE_LINKS,
+		)) {
 			// Deferred (not yet loaded) leaves render with fresh settings when first shown.
 			if (leaf.view instanceof LinksView) leaf.view.onSettingsChanged();
 		}
 	}
+}
+
+const menusWithItem = new WeakSet<Menu>();
+
+/** The web link under the editor cursor, if any. */
+function linkAtCursor(editor: Editor): { url: string; offset: number } | null {
+	const offset = editor.posToOffset(editor.getCursor());
+	const link = extractLinks(editor.getValue()).find(
+		({ position }) =>
+			position.start.offset <= offset && offset <= position.end.offset,
+	);
+	return link ? { url: link.url, offset } : null;
 }

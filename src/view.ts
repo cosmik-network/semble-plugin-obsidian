@@ -15,7 +15,7 @@ import type SemblePlugin from "./main";
 import type { UrlInfo } from "./api";
 import { openLink, renderRow, setSavesFlair } from "./ui";
 import { SEMBLE_ICON } from "./icon";
-import { hostOf } from "./urls";
+import { hostOf, sameUrl } from "./urls";
 
 export const VIEW_TYPE_LINKS = "semble-links";
 
@@ -46,12 +46,20 @@ export class LinksView extends ItemView {
 	/** Reopen link views on the tab (or stat list) the user last chose. */
 	private detailView: ViewId = "library";
 
-	private readonly requestRefresh = debounce(() => void this.refresh(), 250, true);
+	private readonly requestRefresh = debounce(
+		() => void this.refresh(),
+		250,
+		true,
+	);
 	/**
 	 * Looking up stats for links Semble hasn't been asked about waits until the
 	 * note settles, so typing a URL doesn't query every partial URL on the way.
 	 */
-	private readonly fetchStatsLater = debounce(() => void this.fetchStats(true), 1000, true);
+	private readonly fetchStatsLater = debounce(
+		() => void this.fetchStats(true),
+		1000,
+		true,
+	);
 
 	constructor(
 		leaf: WorkspaceLeaf,
@@ -78,18 +86,28 @@ export class LinksView extends ItemView {
 
 		// The list stays in the DOM (just hidden) while a link is open, so its
 		// filter and scroll position survive going back.
-		this.listViewEl = this.contentEl.createDiv({ cls: "semble-links-list-view" });
-		const searchEl = this.listViewEl.createDiv({ cls: "semble-links-search" });
-		new SearchComponent(searchEl).setPlaceholder("Filter links...").onChange((value) => {
-			this.filter = value.trim().toLowerCase();
-			this.render();
+		this.listViewEl = this.contentEl.createDiv({
+			cls: "semble-links-list-view",
 		});
+		const searchEl = this.listViewEl.createDiv({
+			cls: "semble-links-search",
+		});
+		new SearchComponent(searchEl)
+			.setPlaceholder("Filter links...")
+			.onChange((value) => {
+				this.filter = value.trim().toLowerCase();
+				this.render();
+			});
 		this.listEl = this.listViewEl.createDiv({ cls: "semble-links-list" });
-		this.detailEl = this.contentEl.createDiv({ cls: "semble-detail-container" });
+		this.detailEl = this.contentEl.createDiv({
+			cls: "semble-detail-container",
+		});
 		this.detailEl.hide();
 
 		const { workspace, metadataCache, vault } = this.app;
-		this.registerEvent(workspace.on("file-open", (file) => this.setFile(file)));
+		this.registerEvent(
+			workspace.on("file-open", (file) => this.setFile(file)),
+		);
 		// A background check found different counts: show them.
 		this.register(this.plugin.api.onChange(() => this.showStats()));
 		this.registerEvent(
@@ -144,6 +162,24 @@ export class LinksView extends ItemView {
 
 	// --- Detail sub-view ---
 
+	/**
+	 * Open the link view for a URL in the current note, e.g. from a link's
+	 * context menu. With an offset, the link at that spot in the note is used
+	 * so "Jump to link in note" goes to the one that was clicked.
+	 */
+	async showUrl(url: string, offset?: number): Promise<void> {
+		await this.refresh();
+		const atOffset = (link: WebLink) =>
+			offset !== undefined &&
+			link.position.start.offset <= offset &&
+			offset <= link.position.end.offset;
+		const link =
+			this.links.find((candidate) => atOffset(candidate)) ??
+			this.links.find((candidate) => sameUrl(candidate.url, url)) ??
+			unlistedLink(url);
+		this.openDetail(link);
+	}
+
 	private openDetail(link: WebLink): void {
 		this.closeDetail();
 		this.listViewEl.hide();
@@ -179,11 +215,20 @@ export class LinksView extends ItemView {
 		this.rowEls.clear();
 
 		if (!this.file) return this.renderEmpty("No file is open.");
-		if (this.file.extension !== "md") return this.renderEmpty("Links are only listed for Markdown notes.");
+		if (this.file.extension !== "md")
+			return this.renderEmpty(
+				"Links are only listed for Markdown notes.",
+			);
 
-		const links = this.filter ? this.links.filter((link) => matchesFilter(link, this.filter)) : this.links;
+		const links = this.filter
+			? this.links.filter((link) => matchesFilter(link, this.filter))
+			: this.links;
 		if (links.length === 0) {
-			return this.renderEmpty(this.filter ? "No links match the filter." : "No web links in this note.");
+			return this.renderEmpty(
+				this.filter
+					? "No links match the filter."
+					: "No web links in this note.",
+			);
 		}
 		for (const link of links) this.renderItem(link);
 		this.showStats();
@@ -222,10 +267,16 @@ export class LinksView extends ItemView {
 		const { api } = this.plugin;
 		if (!api.hasApiKey) return;
 		const run = ++this.statsRun;
-		const queue = [...this.rowEls.keys()].filter((url) => !onlyMissing || !api.peekUrlInfo(url));
+		const queue = [...this.rowEls.keys()].filter(
+			(url) => !onlyMissing || !api.peekUrlInfo(url),
+		);
 
 		const worker = async () => {
-			for (let url = queue.shift(); url !== undefined; url = queue.shift()) {
+			for (
+				let url = queue.shift();
+				url !== undefined;
+				url = queue.shift()
+			) {
 				let info: UrlInfo;
 				try {
 					info = await api.getUrlInfo(url);
@@ -233,7 +284,8 @@ export class LinksView extends ItemView {
 					continue; // Stats are extra; the row works without them.
 				}
 				if (run !== this.statsRun) return;
-				for (const el of this.rowEls.get(url) ?? []) applyStats(el, info);
+				for (const el of this.rowEls.get(url) ?? [])
+					applyStats(el, info);
 			}
 		};
 		await Promise.all([worker(), worker(), worker()]);
@@ -262,10 +314,23 @@ export class LinksView extends ItemView {
 
 	private showMenu(link: WebLink, evt: MouseEvent): void {
 		const menu = new Menu();
-		menu.addItem((item) => item.setTitle("Show in Semble").setIcon("info").onClick(() => this.openDetail(link)));
-		menu.addItem((item) => item.setTitle("Open on Semble").setIcon("external-link").onClick(() => openLink(link.url)));
 		menu.addItem((item) =>
-			item.setTitle("Jump to link in note").setIcon("text-cursor").onClick(() => this.revealInNote(link)),
+			item
+				.setTitle("Show Semble Details")
+				.setIcon("info")
+				.onClick(() => this.openDetail(link)),
+		);
+		menu.addItem((item) =>
+			item
+				.setTitle("Open on Semble")
+				.setIcon("external-link")
+				.onClick(() => openLink(link.url)),
+		);
+		menu.addItem((item) =>
+			item
+				.setTitle("Jump to link in note")
+				.setIcon("text-cursor")
+				.onClick(() => this.revealInNote(link)),
 		);
 		menu.addSeparator();
 		menu.addItem((item) =>
@@ -289,7 +354,11 @@ export class LinksView extends ItemView {
 		const { workspace } = this.app;
 		let leaf = workspace
 			.getLeavesOfType("markdown")
-			.find((candidate) => candidate.view instanceof MarkdownView && candidate.view.file === file);
+			.find(
+				(candidate) =>
+					candidate.view instanceof MarkdownView &&
+					candidate.view.file === file,
+			);
 		if (!leaf) {
 			leaf = workspace.getLeaf(false);
 			await leaf.openFile(file);
@@ -309,11 +378,30 @@ export class LinksView extends ItemView {
 	}
 }
 
+/** A link that isn't in the note's list, e.g. one Obsidian found that extraction didn't. */
+function unlistedLink(url: string): WebLink {
+	const start = { line: 0, col: 0, offset: 0 };
+	return {
+		url,
+		displayText: url,
+		image: false,
+		original: url,
+		position: { start, end: start },
+	};
+}
+
 function matchesFilter(link: WebLink, filter: string): boolean {
-	return link.displayText.toLowerCase().includes(filter) || link.url.toLowerCase().includes(filter);
+	return (
+		link.displayText.toLowerCase().includes(filter) ||
+		link.url.toLowerCase().includes(filter)
+	);
 }
 
 /** Show a link's Semble save count in its row. */
 function applyStats(itemEl: HTMLElement, info: UrlInfo): void {
-	setSavesFlair(itemEl, info.stats?.libraryCount ?? 0, Boolean(info.urlInLibrary));
+	setSavesFlair(
+		itemEl,
+		info.stats?.libraryCount ?? 0,
+		Boolean(info.urlInLibrary),
+	);
 }
