@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, SecretComponent, Setting, type SettingDefinition } from "obsidian";
+import { App, Modal, PluginSettingTab, requireApiVersion, SecretComponent, Setting, type SettingDefinition } from "obsidian";
 import { API_KEYS_URL } from "./api";
 import { SEMBLE_ICON } from "./icon";
 import type SemblePlugin from "./main";
@@ -17,8 +17,11 @@ export interface SembleSettings {
 	paneAdded: boolean;
 }
 
+/** Secret ID used when the key is entered through the "Set API key" dialog. */
+export const DEFAULT_API_KEY_SECRET = "semble-api-key";
+
 export const DEFAULT_SETTINGS: SembleSettings = {
-	apiKeySecret: "",
+	apiKeySecret: DEFAULT_API_KEY_SECRET,
 	paneAdded: false,
 };
 
@@ -40,20 +43,30 @@ export class SembleSettingTab extends PluginSettingTab {
 	 * settings search. Also the single source for the legacy `display()` below.
 	 */
 	getSettingDefinitions(): SettingDefinition<SettingKey>[] {
+		// Until a key is stored, only offer to set one; the rest only make sense afterwards.
+		const hasKey = () => this.plugin.getApiKey() !== null;
 		return [
 			{
-				name: "API key",
+				name: "Set API key",
 				desc: createFragment((frag) => {
 					frag.appendText("Create a key on your ");
 					frag.createEl("a", { text: "Semble API keys page", href: API_KEYS_URL });
-					frag.appendText(", then save it here as a secret.");
+					frag.appendText(", then paste it here.");
 				}),
+				action: () => new ApiKeyModal(this.app, (key) => void this.saveApiKey(key)).open(),
+				visible: () => !hasKey(),
+			},
+			{
+				name: "API key secret",
+				desc: "The secret that holds the API key. Pick a different one to reuse a key you've already saved.",
 				control: { type: "secret", key: "apiKeySecret" },
+				visible: hasKey,
 			},
 			{
 				name: "Check connection",
 				desc: "Confirm that Semble accepts the API key.",
 				action: () => void this.plugin.checkConnection(),
+				visible: hasKey,
 			},
 		];
 	}
@@ -66,6 +79,23 @@ export class SembleSettingTab extends PluginSettingTab {
 	async setControlValue(key: string, value: unknown): Promise<void> {
 		this.plugin.settings = { ...this.plugin.settings, [key]: value };
 		await this.plugin.saveSettings();
+		this.refresh();
+	}
+
+	/** Store the key under the default secret ID and link it, so the user never has to name it. */
+	private async saveApiKey(key: string): Promise<void> {
+		this.app.secretStorage.setSecret(DEFAULT_API_KEY_SECRET, key);
+		await this.setControlValue("apiKeySecret", DEFAULT_API_KEY_SECRET);
+		await this.plugin.checkConnection();
+	}
+
+	/**
+	 * Re-render so rows shown or hidden by whether a key is stored, and the
+	 * secret picker's linked ID, follow the change.
+	 */
+	private refresh(): void {
+		if (requireApiVersion("1.13.2")) this.update();
+		else this.renderLegacy();
 	}
 
 	/**
@@ -73,10 +103,15 @@ export class SembleSettingTab extends PluginSettingTab {
 	 * getSettingDefinitions() (or its `secret` control). Newer versions never call this.
 	 */
 	display(): void {
+		this.renderLegacy();
+	}
+
+	private renderLegacy(): void {
 		const { containerEl } = this;
 		containerEl.empty();
 
 		for (const def of this.getSettingDefinitions()) {
+			if (typeof def.visible === "function" ? !def.visible() : def.visible === false) continue;
 			const setting = new Setting(containerEl).setName(def.name);
 			if (def.desc) setting.setDesc(def.desc);
 
@@ -92,5 +127,48 @@ export class SembleSettingTab extends PluginSettingTab {
 				);
 			}
 		}
+	}
+}
+
+/** Prompts for the API key alone; the secret ID is fixed to DEFAULT_API_KEY_SECRET. */
+class ApiKeyModal extends Modal {
+	constructor(
+		app: App,
+		private readonly onSave: (key: string) => void,
+	) {
+		super(app);
+	}
+
+	onOpen(): void {
+		this.setTitle("Set API key");
+		let value = "";
+		const save = () => {
+			const key = value.trim();
+			if (!key) return;
+			this.close();
+			this.onSave(key);
+		};
+
+		new Setting(this.contentEl)
+			.setName("API key")
+			.setDesc("Saved in Obsidian's keychain, not in your vault.")
+			.addText((text) => {
+				text.inputEl.type = "password";
+				text.inputEl.addEventListener("keydown", (evt) => {
+					if (evt.key === "Enter") {
+						evt.preventDefault();
+						save();
+					}
+				});
+				text.onChange((v) => (value = v));
+				window.setTimeout(() => text.inputEl.focus());
+			});
+		new Setting(this.contentEl)
+			.addButton((button) => button.setButtonText("Cancel").onClick(() => this.close()))
+			.addButton((button) => button.setButtonText("Save").setCta().onClick(save));
+	}
+
+	onClose(): void {
+		this.contentEl.empty();
 	}
 }
